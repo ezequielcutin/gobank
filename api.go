@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 )
@@ -27,7 +28,9 @@ func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount)).Methods("DELETE")
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccountById))
+	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer)).Methods("POST")
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
@@ -56,11 +59,22 @@ func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) err
 }
 
 func (s *APIServer) handleGetAccountById(w http.ResponseWriter, r *http.Request) error {
-	id := mux.Vars(r)["id"]
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return fmt.Errorf("invalid account ID: %s", idStr)
+	}
 
-	fmt.Println(id)
+	account, err := s.store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
 
-	return WriteJSON(w, http.StatusOK, &Account{})
+	if account == nil {
+		return fmt.Errorf("account not found with ID: %d", id)
+	}
+
+	return WriteJSON(w, http.StatusOK, account)
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
@@ -88,11 +102,42 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return fmt.Errorf("invalid account ID: %s", idStr)
+	}
+
+	// Attempt to delete the account
+	if err := s.store.DeleteAccount(id); err != nil {
+		return err
+	}
+
+	// Return 204 No Content on successful deletion
+	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	var transferReq struct {
+		FromID int64 `json:"fromId"`
+		ToID   int64 `json:"toId"`
+		Amount int64 `json:"amount"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&transferReq); err != nil {
+		return err
+	}
+
+	// Implement the transfer logic
+	if err := s.store.TransferFunds(transferReq.FromID, transferReq.ToID, transferReq.Amount); err != nil {
+		return err
+	}
+
+	// Create a response message
+	responseMessage := fmt.Sprintf("Transaction of %d amount from ID %d to ID %d", transferReq.Amount, transferReq.FromID, transferReq.ToID)
+
+	return WriteJSON(w, http.StatusOK, map[string]string{"message": responseMessage})
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {

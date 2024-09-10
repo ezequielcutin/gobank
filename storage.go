@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -13,6 +14,7 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	GetAccounts() ([]*Account, error)
 	GetAccountByID(int) (*Account, error)
+	TransferFunds(int64, int64, int64) error
 }
 
 type PostgresStore struct {
@@ -78,10 +80,46 @@ func (s *PostgresStore) UpdateAccount(*Account) error {
 	return nil
 }
 func (s *PostgresStore) DeleteAccount(id int) error {
+	query := `delete from account where id = $1`
+	result, err := s.db.Exec(query, id)
+	if err != nil {
+		log.Printf("Error deleting account with ID %d: %v", id, err)
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Printf("Error getting rows affected for account ID %d: %v", id, err)
+		return err
+	}
+
+	if rowsAffected == 0 {
+		log.Printf("No account found with ID %d", id)
+		return fmt.Errorf("no account found with ID %d", id)
+	}
+
 	return nil
 }
+
 func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
-	return nil, nil
+	query := `SELECT
+				id, first_name, 
+				last_name, number, 
+				balance, created_at 
+				FROM account
+				WHERE id = $1`
+	row := s.db.QueryRow(query, id)
+
+	account := &Account{}
+	err := row.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.Balance, &account.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No account found
+		}
+		return nil, err // Other error
+	}
+
+	return account, nil
 }
 
 func (s *PostgresStore) GetAccounts() ([]*Account, error) {
@@ -108,4 +146,32 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 
 	return accounts, nil
 
+}
+
+func (s *PostgresStore) TransferFunds(fromID, toID int64, amount int64) error {
+	// Start a transaction
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() // Rollback if anything fails
+
+	// Deduct amount from the sender's account
+	_, err = tx.Exec(`UPDATE account 
+					SET balance = balance - $1 
+					WHERE id = $2`, amount, fromID)
+	if err != nil {
+		return err
+	}
+
+	// Add amount to the receiver's account
+	_, err = tx.Exec(`UPDATE account
+					SET balance = balance + $1
+					WHERE id = $2`, amount, toID)
+	if err != nil {
+		return err
+	}
+
+	// Commit the transaction
+	return tx.Commit()
 }
