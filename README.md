@@ -9,6 +9,20 @@ GoBank is a bank account management system built from scratch using Go. It provi
 - **Get Account by ID**: Fetches details of a specific account using its ID.
 - **Delete Account**: Deletes an existing bank account.
 - **Transfer Funds**: Facilitates transferring money between accounts.
+- **Overdraft Protection**: Prevent users from withdrawing more funds than they have.
+- **Monopoly Bank Account**: A special account for testing purposes with a balance of 999,999,999.
+
+### Overdraft Protection
+To ensure that users cannot withdraw more funds than they have, the application implements overdraft protection. When a transfer is initiated, the system checks the sender's account balance before proceeding. If the balance is insufficient, the transfer will be rejected, and an error message will be returned. This feature helps maintain the integrity of user accounts and prevents negative balances.
+
+### Monopoly Bank Account
+The application includes a special account known as the "Monopoly Bank," which is designed for testing purposes. This account has a balance of **999,999,999** and serves as a source of funds for transfers. 
+
+- **Account ID**: If running `make run` in the terminal for the first time, it will be ID of 1. Modify as you wish in `main.go` to avoid duplicates.
+- **Balance**: 999,999,999
+- **Purpose**: To facilitate testing of the transfer functionality without the risk of running out of funds.
+
+The system checks for the existence of the Monopoly Bank account upon startup. If it does not exist, the account will be created automatically. This prevents duplicate accounts from being created during multiple runs of the application.
 
 ## Technologies Used
 
