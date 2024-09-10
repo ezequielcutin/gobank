@@ -156,18 +156,25 @@ func (s *PostgresStore) TransferFunds(fromID, toID int64, amount int64) error {
 	}
 	defer tx.Rollback() // Rollback if anything fails
 
+	// Check the sender's balance
+	var balance int64
+	err = tx.QueryRow(`SELECT balance FROM account WHERE id = $1`, fromID).Scan(&balance)
+	if err != nil {
+		return err
+	}
+
+	if balance < amount {
+		return fmt.Errorf("insufficient funds in account ID %d", fromID)
+	}
+
 	// Deduct amount from the sender's account
-	_, err = tx.Exec(`UPDATE account 
-					SET balance = balance - $1 
-					WHERE id = $2`, amount, fromID)
+	_, err = tx.Exec(`UPDATE account SET balance = balance - $1 WHERE id = $2`, amount, fromID)
 	if err != nil {
 		return err
 	}
 
 	// Add amount to the receiver's account
-	_, err = tx.Exec(`UPDATE account
-					SET balance = balance + $1
-					WHERE id = $2`, amount, toID)
+	_, err = tx.Exec(`UPDATE account SET balance = balance + $1 WHERE id = $2`, amount, toID)
 	if err != nil {
 		return err
 	}
