@@ -27,10 +27,19 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
+	// CORS middleware
+	router.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			enableCors(w, r)
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount)).Methods("DELETE")
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccountById))
-	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer)).Methods("POST")
+	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer)).Methods("POST", "OPTIONS")
+
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
@@ -157,5 +166,19 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 		if err := f(w, r); err != nil {
 			WriteJSON(w, http.StatusBadRequest, ApiError{Error: err.Error()})
 		}
+	}
+}
+
+// CORS middleware
+func enableCors(w http.ResponseWriter, r *http.Request) {
+	log.Println("Received CORS request:", r.Method)
+	w.Header().Set("Access-Control-Allow-Origin", "*")                           // Allow all origins
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS") // Allowed methods
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")               // Allowed headers
+
+	// Handle preflight requests
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 }

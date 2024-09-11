@@ -123,7 +123,7 @@ func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
 }
 
 func (s *PostgresStore) GetAccounts() ([]*Account, error) {
-	rows, err := s.db.Query("select * from account")
+	rows, err := s.db.Query("select * from account order by id asc")
 	if err != nil {
 		return nil, err
 	}

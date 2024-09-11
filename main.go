@@ -40,7 +40,7 @@ func createMonopolyBankAccount(store Storage) error {
 	monopolyAccount := &Account{
 		FirstName: "Monopoly",
 		LastName:  "Bank",
-		Number:    999999999,
+		Number:    999999,
 		Balance:   999999999,
 		CreatedAt: time.Now().UTC(),
 	}
