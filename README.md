@@ -87,6 +87,27 @@ The server will run on the specified port, and you can access the API endpoints 
 
 You can use Postman to test the API endpoints. Import the provided Postman collection (if available) or manually create requests to interact with the API.
 
+## Frontend Requirements
+
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
+
+2. Install frontend dependencies:
+   ```
+   npm install
+   ```
+
+3. Start the frontend application:
+   ```
+   npm start
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000) (or whichever port the frontend is running on) to view it in your browser.
+   Make sure the backend is running before running the frontend, otherwise they will not be able to communicate.
+   You can run the frontend and backend in different terminals.
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or features.
