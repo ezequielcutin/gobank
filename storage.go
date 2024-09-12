@@ -15,6 +15,9 @@ type Storage interface {
 	GetAccounts() ([]*Account, error)
 	GetAccountByID(int) (*Account, error)
 	TransferFunds(int64, int64, int64) error
+	CreateUser(*User) error
+	GetUserByEmail(string) (*User, error)
+	GetUserByID(int) (*User, error)
 }
 
 type PostgresStore struct {
@@ -38,7 +41,10 @@ func newPostGresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
-	return s.createAccountTable()
+	if err := s.createAccountTable(); err != nil {
+		return err
+	}
+	return s.createUsersTable()
 }
 
 func (s *PostgresStore) createAccountTable() error {
@@ -181,4 +187,80 @@ func (s *PostgresStore) TransferFunds(fromID, toID int64, amount int64) error {
 
 	// Commit the transaction
 	return tx.Commit()
+}
+
+func (s *PostgresStore) CreateUser(user *User) error {
+	query := `INSERT INTO users 
+    (first_name, last_name, email, password, created_at) 
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id`
+
+	err := s.db.QueryRow(
+		query,
+		user.FirstName,
+		user.LastName,
+		user.Email,
+		user.Password,
+		user.CreatedAt,
+	).Scan(&user.ID)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
+	query := `SELECT id, first_name, last_name, email, password, created_at FROM users WHERE email = $1`
+
+	var user User
+	err := s.db.QueryRow(query, email).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (s *PostgresStore) GetUserByID(id int) (*User, error) {
+	query := `SELECT id, first_name, last_name, email, password, created_at FROM users WHERE id = $1`
+
+	var user User
+	err := s.db.QueryRow(query, id).Scan(
+		&user.ID,
+		&user.FirstName,
+		&user.LastName,
+		&user.Email,
+		&user.Password,
+		&user.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (s *PostgresStore) createUsersTable() error {
+	query := `CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(50),
+        last_name VARCHAR(50),
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP
+    )`
+
+	_, err := s.db.Exec(query)
+	return err
 }

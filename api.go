@@ -8,9 +8,34 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
+
+var jwtSecret []byte
+
+func createJWT(user *User) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"user_id": user.ID,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
+	})
+
+	return token.SignedString(jwtSecret)
+}
+
+func validateJWT(tokenString string) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
+}
 
 type APIServer struct {
 	listenAddr string
@@ -22,6 +47,14 @@ func NewAPIServer(listenAddr string, store Storage) *APIServer {
 		listenAddr: listenAddr,
 		store:      store,
 	}
+}
+
+// Add this struct at the top of the file with other request structs
+type CreateUserRequest struct {
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
 }
 
 func (s *APIServer) Run() {
@@ -39,6 +72,8 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount)).Methods("DELETE")
 	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccountById))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer)).Methods("POST", "OPTIONS")
+	router.HandleFunc("/register", makeHTTPHandleFunc(s.handleRegister)).Methods("POST")
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin)).Methods("POST")
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
@@ -128,25 +163,63 @@ func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
-	var transferReq struct {
-		FromID int64 `json:"fromId"`
-		ToID   int64 `json:"toId"`
-		Amount int64 `json:"amount"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&transferReq); err != nil {
+	transferReq := new(TransferRequest)
+	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
 		return err
 	}
 
-	// Implement the transfer logic
-	if err := s.store.TransferFunds(transferReq.FromID, transferReq.ToID, transferReq.Amount); err != nil {
+	// Get the Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return fmt.Errorf("missing Authorization header")
+	}
+
+	// Extract the token
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := validateJWT(tokenString)
+	if err != nil {
+		return fmt.Errorf("invalid token")
+	}
+
+	// Extract user ID from token
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return fmt.Errorf("invalid token claims")
+	}
+	userID, ok := claims["user_id"].(float64)
+	if !ok {
+		return fmt.Errorf("invalid user ID in token")
+	}
+
+	// Use the user's ID as the fromID
+	if err := s.store.TransferFunds(int64(userID), transferReq.ToID, transferReq.Amount); err != nil {
 		return err
 	}
 
-	// Create a response message
-	responseMessage := fmt.Sprintf("Transaction of %d amount from ID %d to ID %d", transferReq.Amount, transferReq.FromID, transferReq.ToID)
+	return WriteJSON(w, http.StatusOK, map[string]string{"message": "Transfer successful"})
+}
 
-	return WriteJSON(w, http.StatusOK, map[string]string{"message": responseMessage})
+type TransferRequest struct {
+	ToID   int64 `json:"toId"`
+	Amount int64 `json:"amount"`
+}
+
+func (s *APIServer) handleRegister(w http.ResponseWriter, r *http.Request) error {
+	createUserReq := new(CreateUserRequest)
+	if err := json.NewDecoder(r.Body).Decode(createUserReq); err != nil {
+		return err
+	}
+
+	user, err := NewUser(createUserReq.FirstName, createUserReq.LastName, createUserReq.Email, createUserReq.Password)
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.CreateUser(user); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusCreated, user)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -181,4 +254,43 @@ func enableCors(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+}
+
+func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
+	loginReq := new(LoginRequest)
+	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
+		return err
+	}
+
+	user, err := s.store.GetUserByEmail(loginReq.Email)
+	if err != nil {
+		return fmt.Errorf("invalid credentials")
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password)); err != nil {
+		return fmt.Errorf("incorrect password")
+	}
+
+	// Generate JWT token
+	token, err := createJWT(user)
+	if err != nil {
+		return err
+	}
+
+	resp := LoginResponse{
+		Token: token,
+		User:  user,
+	}
+
+	return WriteJSON(w, http.StatusOK, resp)
+}
+
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	Token string `json:"token"`
+	User  *User  `json:"user"`
 }

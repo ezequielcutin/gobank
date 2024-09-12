@@ -2,10 +2,24 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	// Load the .env file
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	// Set the JWT secret from the environment variable
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	if len(jwtSecret) == 0 {
+		log.Fatal("JWT_SECRET is not set in the environment")
+	}
+
 	store, err := newPostGresStore()
 	if err != nil {
 		log.Fatal(err)
