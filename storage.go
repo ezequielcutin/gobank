@@ -41,10 +41,13 @@ func newPostGresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
+	if err := s.createUsersTable(); err != nil {
+		return err
+	}
 	if err := s.createAccountTable(); err != nil {
 		return err
 	}
-	return s.createUsersTable()
+	return nil
 }
 
 func (s *PostgresStore) createAccountTable() error {
@@ -53,8 +56,9 @@ func (s *PostgresStore) createAccountTable() error {
 		first_name varchar(50),
 		last_name varchar(50),
 		number serial,
-		balance serial,
-		created_at timestamp
+		balance BIGINT DEFAULT 0,
+		created_at timestamp,
+		user_id INT REFERENCES users(id) ON DELETE CASCADE
 	)`
 
 	_, err := s.db.Exec(query)
@@ -64,15 +68,18 @@ func (s *PostgresStore) createAccountTable() error {
 func (s *PostgresStore) CreateAccount(acc *Account) error {
 	query := `
 		insert into account
-		(first_name, last_name, number, balance, created_at)
+		(first_name, last_name, number, balance, created_at, user_id)
 		values
-		($1,$2,$3,$4,$5)`
+		($1,$2,$3,$4,$5,$6)`
 	resp, err := s.db.Query(
 		query,
 		acc.FirstName,
 		acc.LastName,
 		acc.Number,
-		acc.Balance, acc.CreatedAt)
+		acc.Balance,
+		acc.CreatedAt,
+		acc.UserID,
+	)
 
 	if err != nil {
 		return err
@@ -133,6 +140,8 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close() // Ensure rows are closed after processing
+
 	accounts := []*Account{}
 	for rows.Next() {
 		account := new(Account)
@@ -142,7 +151,9 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 			&account.LastName,
 			&account.Number,
 			&account.Balance,
-			&account.CreatedAt)
+			&account.CreatedAt,
+			&account.UserID,
+		)
 
 		if err != nil {
 			return nil, err
@@ -252,15 +263,15 @@ func (s *PostgresStore) GetUserByID(id int) (*User, error) {
 }
 
 func (s *PostgresStore) createUsersTable() error {
-	query := `CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        first_name VARCHAR(50),
-        last_name VARCHAR(50),
-        email VARCHAR(100) UNIQUE NOT NULL,
-        password VARCHAR(100) NOT NULL,
-        created_at TIMESTAMP
-    )`
-
+	query := `create table if not exists users (
+		id serial primary key,
+		first_name varchar(50),
+		last_name varchar(50),
+		email varchar(100) unique not null,
+		password varchar(100) not null,
+		created_at timestamp,
+		balance BIGINT DEFAULT 100
+	)`
 	_, err := s.db.Exec(query)
 	return err
 }

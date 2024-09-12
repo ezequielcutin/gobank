@@ -19,6 +19,7 @@ type Account struct {
 	Number    int64     `json:"number"`
 	Balance   int64     `json:"balance"`
 	CreatedAt time.Time `json:"createdAt"`
+	UserID    *int      `json:"userId"` // Added UserID to link to User
 }
 
 func NewAccount(firstName, LastName string) *Account {
@@ -37,6 +38,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Password  string    `json:"-"` // The "-" means this field won't be included in JSON output
 	CreatedAt time.Time `json:"createdAt"`
+	Balance   int64     `json:"balance"`
 }
 
 func NewUser(firstName, lastName, email, password string) (*User, error) {

@@ -219,6 +219,13 @@ func (s *APIServer) handleRegister(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 
+	// Create an account for the user
+	account := NewAccount(createUserReq.FirstName, createUserReq.LastName)
+	account.UserID = &user.ID // Ensure this is the correct user ID
+	if err := s.store.CreateAccount(account); err != nil {
+		return err
+	}
+
 	return WriteJSON(w, http.StatusCreated, user)
 }
 
