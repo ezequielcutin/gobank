@@ -27,7 +27,7 @@ func main() {
 // Create the Monopoly Bank account, important for overdrafting
 func createMonopolyBankAccount(store Storage) error {
 	// Check if the Monopoly Bank account already exists
-	existingAccount, err := store.GetAccountByID(7) // Assuming ID 7 is for Monopoly Bank
+	existingAccount, err := store.GetAccountByID(21) // Change to whichever Monopoly Bank account ID you want to use
 	if err != nil {
 		return err
 	}
