@@ -3,7 +3,8 @@ package main
 import (
 	"database/sql"
 	"log"
-	"os"
+
+	// "os"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -13,12 +14,6 @@ func main() {
 	// Load the .env file
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file")
-	}
-
-	// Set the JWT secret from the environment variable
-	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
-	if len(jwtSecret) == 0 {
-		log.Fatal("JWT_SECRET is not set in the environment")
 	}
 
 	store, err := newPostGresStore()
@@ -39,19 +34,16 @@ func main() {
 	monopolyUser := &User{
 		FirstName: "Monopoly",
 		LastName:  "Bank",
-		Email:     "admin@gmail.com", // Set the email
-		Password:  "megapassword",    // Set the password (ensure to hash it in production)
+		Email:     "admin@gmail.com",
+		Password:  "megapassword",
 		CreatedAt: time.Now().UTC(),
+		Balance:   999999999, // Set initial balance
+		Number:    999999,    // Set account number
 	}
 
 	// Create the user in the database
 	if err := store.CreateUser(monopolyUser); err != nil {
 		log.Fatal("Error creating Monopoly Bank user:", err)
-	}
-
-	// Create the Monopoly Bank account with the user ID
-	if err := createMonopolyBankAccount(store, monopolyUser.ID); err != nil {
-		log.Printf("Error creating Monopoly Bank account: %v", err)
 	}
 
 	server := NewAPIServer(":3000", store)
@@ -61,7 +53,7 @@ func main() {
 // Function to create the Monopoly Bank account
 func createMonopolyBankAccount(store Storage, userID int) error {
 	// Check if the Monopoly Bank account already exists
-	existingAccount, err := store.GetAccountByID(1) // Change to the correct ID if needed
+	existingAccount, err := store.GetUserByID(1) // Change to the correct ID if needed
 	if err != nil {
 		return err
 	}
@@ -72,23 +64,24 @@ func createMonopolyBankAccount(store Storage, userID int) error {
 	}
 
 	// Create a new Monopoly Bank account with the user ID
-	monopolyAccount := &Account{
+	monopolyAccount := &User{
 		FirstName: "Monopoly",
 		LastName:  "Bank",
-		Number:    999999,
-		Balance:   999999999,
+		Email:     "monopolybank@example.com", // Assuming a default email for the Monopoly Bank
+		Password:  "monopolybankpassword",     // Assuming a default password for the Monopoly Bank
 		CreatedAt: time.Now().UTC(),
-		UserID:    &userID, // Assign the user ID here
+		Balance:   999999999,
+		Number:    999999,
 	}
 
-	return store.CreateAccount(monopolyAccount)
+	return store.CreateUser(monopolyAccount)
 }
 
 func dropTables(db *sql.DB) error {
-	_, err := db.Exec(`DROP TABLE IF EXISTS account CASCADE;`)
-	if err != nil {
-		return err
-	}
-	_, err = db.Exec(`DROP TABLE IF EXISTS users CASCADE;`)
+	// _, err := db.Exec(`DROP TABLE IF EXISTS account CASCADE;`)
+	// if err != nil {
+	// 	return err
+	// }
+	_, err := db.Exec(`DROP TABLE IF EXISTS users CASCADE;`)
 	return err
 }

@@ -68,48 +68,51 @@ func (s *APIServer) Run() {
 		})
 	})
 
-	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleAccount))
-	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount)).Methods("DELETE")
-	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetAccountById))
+	router.HandleFunc("/account", makeHTTPHandleFunc(s.handleUser))
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleDeleteUser)).Methods("DELETE")
+	router.HandleFunc("/account/{id}", makeHTTPHandleFunc(s.handleGetUserById))
 	router.HandleFunc("/transfer", makeHTTPHandleFunc(s.handleTransfer)).Methods("POST", "OPTIONS")
-	router.HandleFunc("/register", makeHTTPHandleFunc(s.handleRegister)).Methods("POST")
-	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin)).Methods("POST")
+	router.HandleFunc("/register", makeHTTPHandleFunc(s.handleRegister)).Methods("POST", "OPTIONS")
+	router.HandleFunc("/login", makeHTTPHandleFunc(s.handleLogin)).Methods("POST", "OPTIONS")
+	router.HandleFunc("/balance/{id}", makeHTTPHandleFunc(s.handleGetBalance)).Methods("GET")
+	router.HandleFunc("/transactions/{id}", makeHTTPHandleFunc(s.handleGetTransactions)).Methods("GET")
+	router.HandleFunc("/user-by-email/{email}", makeHTTPHandleFunc(s.handleGetUserByEmail)).Methods("GET")
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }
 
-func (s *APIServer) handleAccount(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleUser(w http.ResponseWriter, r *http.Request) error {
 	if r.Method == "GET" {
-		return s.handleGetAccount(w, r)
+		return s.handleGetUser(w, r)
 	}
 	if r.Method == "POST" {
 		return s.handleCreateAccount(w, r)
 	}
 	if r.Method == "DELETE" {
-		return s.handleDeleteAccount(w, r)
+		return s.handleDeleteUser(w, r)
 	}
 
 	return fmt.Errorf("method not allowed! %s", r.Method)
 }
 
 // GET /account
-func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
-	accounts, err := s.store.GetAccounts()
+func (s *APIServer) handleGetUser(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.store.GetUsers()
 	if err != nil {
 		return err
 	}
 	return WriteJSON(w, http.StatusOK, accounts)
 }
 
-func (s *APIServer) handleGetAccountById(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleGetUserById(w http.ResponseWriter, r *http.Request) error {
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		return fmt.Errorf("invalid account ID: %s", idStr)
 	}
 
-	account, err := s.store.GetAccountByID(id)
+	account, err := s.store.GetUserByID(id)
 	if err != nil {
 		return err
 	}
@@ -132,28 +135,32 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	//needed to include this to navigate EOF error
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
-	createAccountReq := new(CreateAccountRequest)
-	if err := json.NewDecoder(r.Body).Decode(createAccountReq); err != nil {
+	createUserReq := new(CreateUserRequest)
+	if err := json.NewDecoder(r.Body).Decode(createUserReq); err != nil {
 		return err
 	}
 
-	account := NewAccount(createAccountReq.FirstName, createAccountReq.LastName)
-	if err := s.store.CreateAccount(account); err != nil {
+	account, err := NewUser(createUserReq.FirstName, createUserReq.LastName, createUserReq.Email, createUserReq.Password)
+	if err != nil {
+		return err
+	}
+
+	if err := s.store.CreateUser(account); err != nil {
 		return err
 	}
 
 	return WriteJSON(w, http.StatusOK, account)
 }
 
-func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
+func (s *APIServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
 	idStr := mux.Vars(r)["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return fmt.Errorf("invalid account ID: %s", idStr)
+		return fmt.Errorf("invalid user ID: %s", idStr)
 	}
 
 	// Attempt to delete the account
-	if err := s.store.DeleteAccount(id); err != nil {
+	if err := s.store.DeleteUser(id); err != nil {
 		return err
 	}
 
@@ -163,39 +170,49 @@ func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
+	log.Println("Starting transfer process")
+
 	transferReq := new(TransferRequest)
 	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
+		log.Printf("Error decoding transfer request: %v", err)
 		return err
 	}
+	log.Printf("Transfer request decoded: %+v", transferReq)
 
-	// Get the Authorization header
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
+		log.Println("Missing Authorization header")
 		return fmt.Errorf("missing Authorization header")
 	}
 
-	// Extract the token
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 	token, err := validateJWT(tokenString)
 	if err != nil {
+		log.Printf("Invalid token: %v", err)
 		return fmt.Errorf("invalid token")
 	}
+	log.Println("JWT token validated successfully")
 
-	// Extract user ID from token
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
+		log.Println("Invalid token claims")
 		return fmt.Errorf("invalid token claims")
 	}
+
 	userID, ok := claims["user_id"].(float64)
 	if !ok {
+		log.Println("Invalid user ID in token")
 		return fmt.Errorf("invalid user ID in token")
 	}
+	log.Printf("User ID extracted from token: %v", userID)
 
-	// Use the user's ID as the fromID
-	if err := s.store.TransferFunds(int64(userID), transferReq.ToID, transferReq.Amount); err != nil {
+	err = s.store.TransferFunds(int64(userID), transferReq.ToID, transferReq.Amount)
+	if err != nil {
+		log.Printf("Error during transfer: %v", err)
 		return err
 	}
 
+	log.Println("Transfer completed successfully")
 	return WriteJSON(w, http.StatusOK, map[string]string{"message": "Transfer successful"})
 }
 
@@ -219,14 +236,17 @@ func (s *APIServer) handleRegister(w http.ResponseWriter, r *http.Request) error
 		return err
 	}
 
-	// Create an account for the user
-	account := NewAccount(createUserReq.FirstName, createUserReq.LastName)
-	account.UserID = &user.ID // Ensure this is the correct user ID
-	if err := s.store.CreateAccount(account); err != nil {
+	token, err := createJWT(user)
+	if err != nil {
 		return err
 	}
 
-	return WriteJSON(w, http.StatusCreated, user)
+	resp := LoginResponse{
+		Token: token,
+		User:  user,
+	}
+
+	return WriteJSON(w, http.StatusCreated, resp)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -254,7 +274,7 @@ func enableCors(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received CORS request:", r.Method)
 	w.Header().Set("Access-Control-Allow-Origin", "*")                           // Allow all origins
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS") // Allowed methods
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")               // Allowed headers
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorzation") // Allowed headers
 
 	// Handle preflight requests
 	if r.Method == http.MethodOptions {
@@ -266,21 +286,36 @@ func enableCors(w http.ResponseWriter, r *http.Request) {
 func (s *APIServer) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	loginReq := new(LoginRequest)
 	if err := json.NewDecoder(r.Body).Decode(loginReq); err != nil {
+		log.Printf("Error decoding login request: %v", err)
 		return err
 	}
 
 	user, err := s.store.GetUserByEmail(loginReq.Email)
 	if err != nil {
+		log.Printf("Error getting user by email: %v", err)
 		return fmt.Errorf("invalid credentials")
 	}
 
+	if user == nil {
+		log.Printf("User not found for email: %s", loginReq.Email)
+		return fmt.Errorf("invalid credentials")
+	}
+
+	log.Printf("Retrieved user from database - Email: %s, Hashed Password: %s", user.Email, user.Password)
+
+	log.Printf("Comparing passwords for user: %s", loginReq.Email)
+	log.Printf("Stored hashed password: %s", user.Password)
+	log.Printf("Provided password: %s", loginReq.Password)
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(loginReq.Password)); err != nil {
+		log.Printf("Password comparison failed: %v", err)
 		return fmt.Errorf("incorrect password")
 	}
 
 	// Generate JWT token
 	token, err := createJWT(user)
 	if err != nil {
+		log.Printf("Error creating JWT: %v", err)
 		return err
 	}
 
@@ -300,4 +335,64 @@ type LoginRequest struct {
 type LoginResponse struct {
 	Token string `json:"token"`
 	User  *User  `json:"user"`
+}
+
+func (s *APIServer) handleGetBalance(w http.ResponseWriter, r *http.Request) error {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %s", idStr)
+	}
+
+	balance, err := s.store.GetBalance(id)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string]int64{"balance": balance})
+}
+
+func (s *APIServer) handleGetTransactions(w http.ResponseWriter, r *http.Request) error {
+	idStr := mux.Vars(r)["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %s", idStr)
+	}
+
+	transactions, err := s.store.GetTransactions(id)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, transactions)
+}
+
+// func (s *APIServer) handleGetBalance(w http.ResponseWriter, r *http.Request) error {
+//     id := mux.Vars(r)["id"]
+//     // Convert id to int and fetch balance from database
+//     // For now, let's return a dummy balance
+//     return WriteJSON(w, http.StatusOK, map[string]int{"balance": 1000})
+// }
+
+// func (s *APIServer) handleGetTransactions(w http.ResponseWriter, r *http.Request) error {
+//     id := mux.Vars(r)["id"]
+//     // Fetch transactions from database
+//     // For now, let's return dummy transactions
+//     transactions := []map[string]interface{}{
+//         {"id": 1, "amount": 100, "type": "deposit"},
+//         {"id": 2, "amount": 50, "type": "withdrawal"},
+//     }
+//     return WriteJSON(w, http.StatusOK, transactions)
+// }
+
+func (s *APIServer) handleGetUserByEmail(w http.ResponseWriter, r *http.Request) error {
+	email := mux.Vars(r)["email"]
+	user, err := s.store.GetUserByEmail(email)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return fmt.Errorf("user not found with email: %s", email)
+	}
+	return WriteJSON(w, http.StatusOK, user)
 }

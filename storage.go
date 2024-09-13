@@ -9,15 +9,15 @@ import (
 )
 
 type Storage interface {
-	CreateAccount(*Account) error
-	DeleteAccount(int) error
-	UpdateAccount(*Account) error
-	GetAccounts() ([]*Account, error)
-	GetAccountByID(int) (*Account, error)
-	TransferFunds(int64, int64, int64) error
 	CreateUser(*User) error
-	GetUserByEmail(string) (*User, error)
+	DeleteUser(int) error
+	UpdateUser(*User) error
+	GetUsers() ([]*User, error)
 	GetUserByID(int) (*User, error)
+	GetUserByEmail(string) (*User, error)
+	TransferFunds(fromID int64, toID int64, amount int64) error
+	GetBalance(id int) (int64, error)
+	GetTransactions(id int) ([]Transaction, error)
 }
 
 type PostgresStore struct {
@@ -44,181 +44,154 @@ func (s *PostgresStore) Init() error {
 	if err := s.createUsersTable(); err != nil {
 		return err
 	}
-	if err := s.createAccountTable(); err != nil {
+	if err := s.createTransactionsTable(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *PostgresStore) createAccountTable() error {
-	query := `create table if not exists account (
+func (s *PostgresStore) createUsersTable() error {
+	query := `create table if not exists users (
 		id serial primary key,
 		first_name varchar(50),
 		last_name varchar(50),
-		number serial,
-		balance BIGINT DEFAULT 0,
+		email varchar(100) unique not null,
+		password varchar(100) not null,
 		created_at timestamp,
-		user_id INT REFERENCES users(id) ON DELETE CASCADE
+		balance BIGINT DEFAULT 100
 	)`
+	_, err := s.db.Exec(query)
+	return err
+}
+
+func (s *PostgresStore) createTransactionsTable() error {
+	query := `CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )`
 
 	_, err := s.db.Exec(query)
 	return err
 }
 
-func (s *PostgresStore) CreateAccount(acc *Account) error {
-	query := `
-		insert into account
-		(first_name, last_name, number, balance, created_at, user_id)
-		values
-		($1,$2,$3,$4,$5,$6)`
-	resp, err := s.db.Query(
-		query,
-		acc.FirstName,
-		acc.LastName,
-		acc.Number,
-		acc.Balance,
-		acc.CreatedAt,
-		acc.UserID,
-	)
+func (s *PostgresStore) CreateUser(user *User) error {
+	log.Printf("Original (already hashed) password: %s", user.Password)
 
-	if err != nil {
-		return err
-	}
+	log.Printf("Creating user with email: %s", user.Email)
+	log.Printf("Hashed password to be stored: %s", user.Password)
 
-	fmt.Printf("%+v\n", resp)
-
-	return nil
+	query := `INSERT INTO users (first_name, last_name, email, password, created_at, balance) VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := s.db.Exec(query, user.FirstName, user.LastName, user.Email, user.Password, user.CreatedAt, user.Balance)
+	return err
 }
-func (s *PostgresStore) UpdateAccount(*Account) error {
-	return nil
-}
-func (s *PostgresStore) DeleteAccount(id int) error {
-	query := `delete from account where id = $1`
+
+func (s *PostgresStore) DeleteUser(id int) error {
+	query := `delete from users where id = $1`
 	result, err := s.db.Exec(query, id)
 	if err != nil {
-		log.Printf("Error deleting account with ID %d: %v", id, err)
+		log.Printf("Error deleting user with ID %d: %v", id, err)
 		return err
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		log.Printf("Error getting rows affected for account ID %d: %v", id, err)
+		log.Printf("Error getting rows affected for user ID %d: %v", id, err)
 		return err
 	}
 
 	if rowsAffected == 0 {
-		log.Printf("No account found with ID %d", id)
-		return fmt.Errorf("no account found with ID %d", id)
+		log.Printf("No user found with ID %d", id)
+		return fmt.Errorf("no user found with ID %d", id)
 	}
 
 	return nil
 }
 
-func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
-	query := `SELECT
-				id, first_name, 
-				last_name, number, 
-				balance, created_at 
-				FROM account
-				WHERE id = $1`
-	row := s.db.QueryRow(query, id)
+func (s *PostgresStore) UpdateUser(user *User) error {
+	query := `UPDATE users SET first_name = $1, last_name = $2, email = $3, password = $4, balance = $5 WHERE id = $6`
+	_, err := s.db.Exec(query, user.FirstName, user.LastName, user.Email, user.Password, user.Balance, user.ID)
+	return err
+}
 
-	account := &Account{}
-	err := row.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Number, &account.Balance, &account.CreatedAt)
+func (s *PostgresStore) GetUserByID(id int) (*User, error) {
+	query := `SELECT id, first_name, last_name, email, password, created_at, balance FROM users WHERE id = $1`
+	var user User
+	err := s.db.QueryRow(query, id).Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.Balance)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, nil // No account found
+			return nil, nil // No user found
 		}
 		return nil, err // Other error
 	}
-
-	return account, nil
+	return &user, nil
 }
 
-func (s *PostgresStore) GetAccounts() ([]*Account, error) {
-	rows, err := s.db.Query("select * from account order by id asc")
+func (s *PostgresStore) GetUsers() ([]*User, error) {
+	rows, err := s.db.Query("SELECT * FROM users ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close() // Ensure rows are closed after processing
 
-	accounts := []*Account{}
+	users := []*User{}
 	for rows.Next() {
-		account := new(Account)
-		err := rows.Scan(
-			&account.ID,
-			&account.FirstName,
-			&account.LastName,
-			&account.Number,
-			&account.Balance,
-			&account.CreatedAt,
-			&account.UserID,
-		)
-
+		user := new(User)
+		err := rows.Scan(&user.ID, &user.FirstName, &user.LastName, &user.Email, &user.Password, &user.CreatedAt, &user.Balance)
 		if err != nil {
 			return nil, err
 		}
-		accounts = append(accounts, account)
+		users = append(users, user)
 	}
 
-	return accounts, nil
-
+	return users, nil
 }
 
 func (s *PostgresStore) TransferFunds(fromID, toID int64, amount int64) error {
-	// Start a transaction
+	log.Printf("Starting transfer: From ID %d to ID %d, Amount: %d", fromID, toID, amount)
+
 	tx, err := s.db.Begin()
 	if err != nil {
+		log.Printf("Error starting transaction: %v", err)
 		return err
 	}
-	defer tx.Rollback() // Rollback if anything fails
+	defer tx.Rollback()
 
-	// Check the sender's balance
-	var balance int64
-	err = tx.QueryRow(`SELECT balance FROM account WHERE id = $1`, fromID).Scan(&balance)
+	var fromBalance int64
+	err = tx.QueryRow(`SELECT balance FROM users WHERE id = $1`, fromID).Scan(&fromBalance)
 	if err != nil {
+		log.Printf("Error fetching sender balance: %v", err)
 		return err
 	}
+	log.Printf("Sender (ID: %d) balance: %d", fromID, fromBalance)
 
-	if balance < amount {
+	if fromBalance < amount {
+		log.Printf("Insufficient funds: Balance %d, Amount %d", fromBalance, amount)
 		return fmt.Errorf("insufficient funds in account ID %d", fromID)
 	}
 
-	// Deduct amount from the sender's account
-	_, err = tx.Exec(`UPDATE account SET balance = balance - $1 WHERE id = $2`, amount, fromID)
+	_, err = tx.Exec(`UPDATE users SET balance = balance - $1 WHERE id = $2`, amount, fromID)
 	if err != nil {
+		log.Printf("Error updating sender balance: %v", err)
 		return err
 	}
 
-	// Add amount to the receiver's account
-	_, err = tx.Exec(`UPDATE account SET balance = balance + $1 WHERE id = $2`, amount, toID)
+	_, err = tx.Exec(`UPDATE users SET balance = balance + $1 WHERE id = $2`, amount, toID)
 	if err != nil {
+		log.Printf("Error updating recipient balance: %v", err)
 		return err
 	}
 
-	// Commit the transaction
-	return tx.Commit()
-}
-
-func (s *PostgresStore) CreateUser(user *User) error {
-	query := `INSERT INTO users 
-    (first_name, last_name, email, password, created_at) 
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id`
-
-	err := s.db.QueryRow(
-		query,
-		user.FirstName,
-		user.LastName,
-		user.Email,
-		user.Password,
-		user.CreatedAt,
-	).Scan(&user.ID)
-
+	err = tx.Commit()
 	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
 		return err
 	}
 
+	log.Println("Transfer completed successfully")
 	return nil
 }
 
@@ -239,39 +212,35 @@ func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 		return nil, err
 	}
 
+	log.Printf("Retrieved user from database - Email: %s, Hashed Password: %s", user.Email, user.Password)
+
 	return &user, nil
 }
 
-func (s *PostgresStore) GetUserByID(id int) (*User, error) {
-	query := `SELECT id, first_name, last_name, email, password, created_at FROM users WHERE id = $1`
+func (s *PostgresStore) GetBalance(id int) (int64, error) {
+	var balance int64
+	err := s.db.QueryRow("SELECT balance FROM users WHERE id = $1", id).Scan(&balance)
+	if err != nil {
+		return 0, err
+	}
+	return balance, nil
+}
 
-	var user User
-	err := s.db.QueryRow(query, id).Scan(
-		&user.ID,
-		&user.FirstName,
-		&user.LastName,
-		&user.Email,
-		&user.Password,
-		&user.CreatedAt,
-	)
-
+func (s *PostgresStore) GetTransactions(id int) ([]Transaction, error) {
+	rows, err := s.db.Query("SELECT id, amount, type, created_at FROM transactions WHERE user_id = $1", id)
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 
-	return &user, nil
-}
-
-func (s *PostgresStore) createUsersTable() error {
-	query := `create table if not exists users (
-		id serial primary key,
-		first_name varchar(50),
-		last_name varchar(50),
-		email varchar(100) unique not null,
-		password varchar(100) not null,
-		created_at timestamp,
-		balance BIGINT DEFAULT 100
-	)`
-	_, err := s.db.Exec(query)
-	return err
+	var transactions []Transaction
+	for rows.Next() {
+		var t Transaction
+		err := rows.Scan(&t.ID, &t.Amount, &t.Type, &t.CreatedAt)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, t)
+	}
+	return transactions, nil
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { transferFunds } from '../services/api';
 import { CreditCard, DollarSign } from 'lucide-react';
 
@@ -7,16 +7,18 @@ const TransferForm: React.FC<{ onTransfer: () => void }> = ({ onTransfer }) => {
   const [toId, setToId] = useState('');
   const [amount, setAmount] = useState('');
 
+  useEffect(() => {
+    const storedUserId = localStorage.getItem('userId');
+    if (storedUserId) {
+      setFromId(storedUserId);
+    }
+  }, []);
+
   const handleTransfer = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     try {
-      const fromIdInt = parseInt(fromId, 10);
-      const toIdInt = parseInt(toId, 10);
-      const amountInt = parseInt(amount, 10);
-
-      await transferFunds(fromIdInt, toIdInt, amountInt);
+      await transferFunds(fromId, parseInt(toId), parseInt(amount));
       onTransfer();
-      setFromId('');
       setToId('');
       setAmount('');
     } catch (error) {
