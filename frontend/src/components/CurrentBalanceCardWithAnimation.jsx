@@ -1,14 +1,11 @@
-import React, { useState, useEffect, useRef} from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getUserIdByEmail } from '../services/api';
 
 let gradientAngle = 0;
 
-
-
-const CurrentBalanceCard = ({ refreshTrigger }) => {
+const CurrentBalanceCard = () => {
   const [balance, setBalance] = useState(null);
-  const cardRef = useRef(null);
 
   useEffect(() => {
     //-------------------------- backend stuff --------------------------
@@ -43,18 +40,18 @@ const CurrentBalanceCard = ({ refreshTrigger }) => {
         const normalizedY = (((event.clientY - rect.top) / rect.height) + 0.5) * 2;
 
         // Log corner outputs based on mouse position
-        // console.log(`Mouse Position (normalized): (${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`);
+        console.log(`Mouse Position (normalized): (${normalizedX.toFixed(2)}, ${normalizedY.toFixed(2)})`);
 
         // Calculate theta (angle) using atan2 for proper angle calculation
         var theta = Math.atan2(normalizedY, normalizedX);
-        // console.log("Theta (angle in radians): ", theta);
+        console.log("Theta (angle in radians): ", theta);
 
         // Convert radians to degrees for the gradient
         gradientAngle = theta * (180 / Math.PI);
-        // console.log("Gradient Angle (in degrees):", gradientAngle);
+        console.log("Gradient Angle (in degrees):", gradientAngle);
 
         // Apply the gradient directly to the element's background
-        gradientVar.style.background = `linear-gradient(${gradientAngle}deg, #3b82f6, #8b5cf6, #d946ef)`;
+        gradientVar.style.background = `linear-gradient(${gradientAngle}deg, red, blue, yellow)`;
       };
 
       gradientVar.addEventListener('mousemove', handleMouseMove);
@@ -65,22 +62,20 @@ const CurrentBalanceCard = ({ refreshTrigger }) => {
       };
     }
 
-  }, [refreshTrigger]);
+  }, []);
 
 
   return (
     <div
-      ref={cardRef}
-      className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600 text-white rounded-lg shadow-lg p-6 transition-all duration-300 ease-in-out overflow-hidden"
+      className="text-white rounded-lg shadow-lg p-6"
     >
       <h2 className="text-2xl font-bold mb-4">Current Balance</h2>
       {balance === null ? (
         <div className="h-12 w-24 bg-white/20 animate-pulse rounded"></div>
       ) : (
-        <p className="text-1xl font-bold break-words">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <p className="text-4xl font-bold">${balance.toFixed(2)}</p>
       )}
     </div>
   );
 }
-
 export default CurrentBalanceCard;

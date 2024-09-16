@@ -5,27 +5,31 @@ const Home: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <h1 className="text-4xl font-bold mb-8">Welcome to GoBank</h1>
-      <div className="space-y-4">
-        <button
-          onClick={() => navigate('/login')}
-          className="w-64 bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition duration-300"
-        >
-          Login
-        </button>
-        <button
-          onClick={() => navigate('/register')}
-          className="w-64 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300"
-        >
-          Register
-        </button>
-        <button
-          onClick={() => navigate('/admin')}
-          className="w-64 bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600 transition duration-300"
-        >
-          Admin View (Monopoly Bank)
-        </button>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-100 to-purple-100">
+      <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full">
+        <h1 className="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-500 to-purple-600 bg-clip-text text-transparent">
+          Welcome to GoBank
+        </h1>
+        <div className="space-y-4">
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-4 rounded-lg hover:from-blue-600 hover:to-indigo-700 transition duration-300 shadow-md"
+          >
+            Login
+          </button>
+          <button
+            onClick={() => navigate('/register')}
+            className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-3 px-4 rounded-lg hover:from-purple-600 hover:to-pink-700 transition duration-300 shadow-md"
+          >
+            Register
+          </button>
+          <button
+            onClick={() => navigate('/admin')}
+            className="w-full bg-gradient-to-r from-gray-700 to-gray-900 text-white py-3 px-4 rounded-lg hover:from-gray-800 hover:to-black transition duration-300 shadow-md"
+          >
+            Admin View (Monopoly Bank)
+          </button>
+        </div>
       </div>
     </div>
   );

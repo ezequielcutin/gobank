@@ -4,7 +4,7 @@ import axios from 'axios';
 const API_URL = 'http://localhost:3000/'; // Ensure this matches your backend
 
 export const getUsers = () => {
-    return axios.get(`${API_URL}`);
+  return axios.get(`${API_URL}account`);
 };
 
 export const createUser = async (firstName, lastName, email, password) => {
@@ -21,8 +21,14 @@ export const createUser = async (firstName, lastName, email, password) => {
     }
   };
 
-export const transferFunds = (fromId, toId, amount) => {
-    return axios.post(`${API_URL}transfer`, { fromId, toId, amount });
+  export const transferFunds = (fromId, toId, amount) => {
+    const token = localStorage.getItem('token');
+    return axios.post(`${API_URL}transfer`, { toId, amount }, {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
 };
 
 export const deleteUser = (id) => {
@@ -32,7 +38,8 @@ export const deleteUser = (id) => {
 export const loginUser = async (email, password) => {
   try {
     const response = await axios.post(`${API_URL}login`, { email, password });
-    if (response.data.user && response.data.user.id) {
+    if (response.data.token) {
+      localStorage.setItem('token', response.data.token);
       localStorage.setItem('userEmail', response.data.user.email);
       console.log("Email stored in local storage: ", response.data.user.email);
     }
@@ -51,6 +58,17 @@ export const getUserIdByEmail = async (email) => {
     return response.data.id;
   } catch (error) {
     console.error('Error fetching user ID:', error);
+    throw error;
+  }
+};
+
+// Add this new function to your existing api.js file
+export const getUserDetails = async (userEmail) => {
+  try {
+    const response = await axios.get(`http://localhost:3000/user-details/${userEmail}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user details:', error);
     throw error;
   }
 };
