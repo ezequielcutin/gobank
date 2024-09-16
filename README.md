@@ -90,35 +90,6 @@ The server will run on the specified port, and you can access the API endpoints 
 - `DELETE /account/{id}`: Delete an account by ID.
 - `POST /transfer`: Transfer funds between accounts (implementation to be added).
 
-
-## Testing with Postman
-
-You can use Postman to test the API endpoints. Import the provided Postman collection (if available) or manually create requests to interact with the API.
-
-## Frontend Requirements
-
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
-
-2. Install frontend dependencies:
-   ```
-   npm install
-   ```
-
-3. Start the frontend application:
-   ```
-   npm start
-   ```
-
-   Open [http://localhost:3001](http://localhost:3001) (or whichever port the frontend is running on) to view it in your browser.
-   Make sure the backend is running before running the frontend, otherwise they will not be able to communicate.
-   You can run the frontend and backend in different terminals.
-
-
-## API Endpoints
-
 ### User Authentication
 
 - **Register**
@@ -218,6 +189,31 @@ You can use Postman to test the API endpoints. Import the provided Postman colle
   GET /user-details/{email}
   ```
 
+
+## Testing with Postman
+
+You can use Postman to test the API endpoints. Import the provided Postman collection (if available) or manually create requests to interact with the API.
+
+## Frontend Requirements
+
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
+
+2. Install frontend dependencies:
+   ```
+   npm install
+   ```
+
+3. Start the frontend application:
+   ```
+   npm start
+   ```
+
+   Open [http://localhost:3001](http://localhost:3001) (or whichever port the frontend is running on) to view it in your browser.
+   Make sure the backend is running before running the frontend, otherwise they will not be able to communicate.
+   You can run the frontend and backend in different terminals.
 
 ## Frontend Components
 
