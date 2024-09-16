@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -30,12 +31,17 @@ func main() {
 		log.Fatal(err)
 	}
 
+	monopolyPassword := "megapassword"
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(monopolyPassword), bcrypt.DefaultCost)
+	if err != nil {
+		log.Fatal("Error hashing Monopoly Bank password:", err)
+	}
 	// Create a user for the Monopoly Bank
 	monopolyUser := &User{
 		FirstName: "Monopoly",
 		LastName:  "Bank",
 		Email:     "admin@gmail.com",
-		Password:  "megapassword",
+		Password:  string(hashedPassword),
 		CreatedAt: time.Now().UTC(),
 		Balance:   999999999, // Set initial balance
 		Number:    999999,    // Set account number
@@ -83,5 +89,6 @@ func dropTables(db *sql.DB) error {
 	// 	return err
 	// }
 	_, err := db.Exec(`DROP TABLE IF EXISTS users CASCADE;`)
+	_, err = db.Exec(`DROP TABLE IF EXISTS transactions CASCADE;`)
 	return err
 }

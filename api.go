@@ -25,6 +25,7 @@ func createJWT(user *User) (string, error) {
 		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 
+	// fmt.Printf(token.SignedString(jwtSecret)) //token printing (debug)
 	return token.SignedString(jwtSecret)
 }
 
@@ -77,6 +78,7 @@ func (s *APIServer) Run() {
 	router.HandleFunc("/balance/{id}", makeHTTPHandleFunc(s.handleGetBalance)).Methods("GET")
 	router.HandleFunc("/transactions/{id}", makeHTTPHandleFunc(s.handleGetTransactions)).Methods("GET")
 	router.HandleFunc("/user-by-email/{email}", makeHTTPHandleFunc(s.handleGetUserByEmail)).Methods("GET")
+	router.HandleFunc("/user-details/{email}", makeHTTPHandleFunc(s.handleGetUserDetails)).Methods("GET")
 
 	log.Println("JSON API server running on port: ", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
@@ -272,9 +274,9 @@ func makeHTTPHandleFunc(f apiFunc) http.HandlerFunc {
 // CORS middleware
 func enableCors(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received CORS request:", r.Method)
-	w.Header().Set("Access-Control-Allow-Origin", "*")                           // Allow all origins
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS") // Allowed methods
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorzation") // Allowed headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")                            // Allow all origins
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")  // Allowed methods
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization") // Allowed headers
 
 	// Handle preflight requests
 	if r.Method == http.MethodOptions {
@@ -395,4 +397,22 @@ func (s *APIServer) handleGetUserByEmail(w http.ResponseWriter, r *http.Request)
 		return fmt.Errorf("user not found with email: %s", email)
 	}
 	return WriteJSON(w, http.StatusOK, user)
+}
+
+func (s *APIServer) handleGetUserDetails(w http.ResponseWriter, r *http.Request) error {
+	email := mux.Vars(r)["email"]
+	user, err := s.store.GetUserByEmail(email)
+	if err != nil {
+		return err
+	}
+
+	userDetails := struct {
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+	}{
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+	}
+
+	return WriteJSON(w, http.StatusOK, userDetails)
 }

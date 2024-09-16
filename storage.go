@@ -185,6 +185,19 @@ func (s *PostgresStore) TransferFunds(fromID, toID int64, amount int64) error {
 		return err
 	}
 
+	//insert transaction records:
+	_, err = tx.Exec(`INSERT INTO transactions (user_id, amount, type) VALUES ($1, $2, $3)`, fromID, -amount, "Sent")
+	if err != nil {
+		log.Printf("Error inserting sender transaction: %v", err)
+		return err
+	}
+
+	_, err = tx.Exec(`INSERT INTO transactions (user_id, amount, type) VALUES ($1, $2, $3)`, toID, amount, "Received")
+	if err != nil {
+		log.Printf("Error inserting recipient transaction: %v", err)
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		log.Printf("Error committing transaction: %v", err)
