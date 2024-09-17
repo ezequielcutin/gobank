@@ -77,7 +77,7 @@ const CurrentBalanceCard = ({ refreshTrigger }) => {
       {balance === null ? (
         <div className="h-12 w-24 bg-white/20 animate-pulse rounded"></div>
       ) : (
-        <p className="text-1xl font-bold break-words">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        <p className="text-2xl font-bold break-words">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
       )}
     </div>
   );
