@@ -23,9 +23,9 @@ func main() {
 	}
 
 	// Drop existing tables
-	if err := dropTables(store.db); err != nil {
-		log.Fatal("Error dropping tables:", err)
-	}
+	// if err := dropTables(store.db); err != nil {
+	// 	log.Fatal("Error dropping tables:", err)
+	// }
 
 	if err := store.Init(); err != nil {
 		log.Fatal(err)
